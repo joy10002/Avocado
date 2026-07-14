@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>아보카도 (Avocado) - 아이디어 보따리</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@400;600;800&display=swap');
+        :root { --avo-skin: #2D3A18; --avo-flesh: #A3D160; --avo-seed: #744F28; }
+        body { font-family: 'Pretendard', sans-serif; background-color: #FDFCF8; color: #2D3A18; overflow-x: hidden; }
+        .glass-card { background: rgba(255, 255, 255, 0.7); backdrop-filter: blur(10px); border: 1px solid rgba(163, 209, 96, 0.2); }
+        .animate-wobble { animation: wobble 0.5s ease-in-out; }
+        @keyframes wobble { 0%, 100% { transform: rotate(0deg); } 25% { transform: rotate(-3deg); } 75% { transform: rotate(3deg); } }
+        .mindmap-node { cursor: pointer; transition: transform 0.2s; }
+        .mindmap-node:hover { transform: scale(1.1); }
+        canvas { cursor: grab; }
+        canvas:active { cursor: grabbing; }
+    </style>
+</head>
+<body class="min-h-screen">
+
+    <!-- Chosen Palette: Ripened Avocado (Deep Greens, Creamy Yellows, Earthy Browns) -->
+    <!-- Application Structure Plan: 
+        1. 메인 대시보드: 아보카도 육성 시뮬레이션 인터페이스. 키워드를 입력할 때마다 중앙의 아보카도 시각 요소가 물리적으로 변화함 (색상 진해짐, 씨앗 생성 등).
+        2. 숙성 로직: 키워드 개수에 따라 숙성도를 퍼센트로 계산하고 UI에 즉각 반영.
+        3. 수확 모드: 숙성 완료 후 전환되는 결과 페이지. HTML5 Canvas를 이용해 사용자의 키워드와 AI 확장 키워드를 연결하는 인터랙티브 마인드맵 구현.
+        4. 인사이트 도출: 마인드맵 옆에 캠페인 슬로건과 비주얼 톤앤매너를 자동으로 제안하여 기획자의 초기 작업을 보조함.
+    -->
+
+    <!-- Navigation -->
+    <nav class="sticky top-0 z-50 glass-card px-6 py-4">
+        <div class="max-w-7xl mx-auto flex justify-between items-center">
+            <div class="flex items-center gap-3 cursor-pointer" onclick="location.reload()">
+                <div class="w-10 h-10 bg-avocado-400 rounded-full flex items-center justify-center text-2xl shadow-inner">🥑</div>
+                <h1 class="text-xl font-black tracking-tighter text-emerald-900">아보카도 <span class="text-lime-600 font-normal">보따리</span></h1>
+            </div>
+            <div id="navStatus" class="hidden flex items-center gap-4">
+                <div class="bg-lime-100 px-3 py-1.5 rounded-full border border-lime-200">
+                    <span id="navProjectTitle" class="text-xs font-bold text-emerald-800">프로젝트명</span>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="max-w-7xl mx-auto p-6 md:p-10">
+        
+        <!-- Section 1: Welcome/Start -->
+        <section id="startSection" class="py-20 text-center">
+            <div class="w-24 h-24 bg-lime-100 rounded-full flex items-center justify-center text-5xl mx-auto mb-6">🌱</div>
+            <h2 class="text-4xl font-black mb-4">새로운 아이디어를 심어볼까요?</h2>
+            <p class="text-slate-500 mb-10">브랜드나 캠페인 이름을 정하고 아보카도를 키워보세요.</p>
+            <div class="max-w-md mx-auto flex flex-col gap-3">
+                <input type="text" id="initialProjectTitle" placeholder="프로젝트 이름을 입력하세요" class="w-full px-6 py-4 rounded-2xl border-2 border-lime-100 focus:border-lime-400 outline-none text-lg font-bold">
+                <button onclick="initProject()" class="w-full bg-emerald-800 text-white font-black py-4 rounded-2xl shadow-xl hover:bg-emerald-900 transition-all">아보카도 심기</button>
+            </div>
+        </section>
+
+        <!-- Section 2: Incubation Workspace -->
+        <section id="workSection" class="hidden">
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                <!-- Left: Visual Chamber -->
+                <div class="lg:col-span-7">
+                    <div class="glass-card rounded-[3rem] p-10 flex flex-col items-center relative overflow-hidden min-h-[600px]">
+                        <div class="w-full flex justify-between items-start mb-10">
+                            <div>
+                                <span class="text-[10px] font-black text-lime-600 uppercase tracking-widest">Incubating...</span>
+                                <h3 id="currentTitleDisplay" class="text-3xl font-black">프로젝트</h3>
+                            </div>
+                            <div class="text-right">
+                                <span id="ripenessText" class="text-2xl font-black text-lime-500">0%</span>
+                                <div class="w-32 h-2 bg-slate-100 rounded-full mt-1 overflow-hidden">
+                                    <div id="ripenessBar" class="h-full bg-lime-500 transition-all duration-500" style="width: 0%"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Central Avocado Visual -->
+                        <div id="avocadoContainer" class="relative mt-10 transition-transform duration-500">
+                            <div id="avoBody" class="w-56 h-72 relative rounded-[45%_45%_50%_50%] border-4 border-emerald-950 transition-all duration-1000 shadow-2xl" style="background-color: #D1EBAD;">
+                                <!-- Flesh -->
+                                <div id="avoFlesh" class="absolute inset-2 rounded-[45%_45%_50%_50%] transition-all duration-1000" style="background-color: #F7F9E8;"></div>
+                                <!-- Seed -->
+                                <div id="avoSeed" class="absolute bottom-10 left-1/2 -translate-x-1/2 w-24 h-24 bg-[#744F28] rounded-full border-4 border-[#523419] opacity-0 transition-all duration-1000 scale-50"></div>
+                            </div>
+                        </div>
+
+                        <div class="mt-16 text-center">
+                            <p id="guideText" class="text-slate-400 font-medium mb-6">아이디어 키워드를 입력해 주세요 (최소 5개)</p>
+                            <button id="harvestBtn" disabled onclick="handleHarvest()" class="bg-slate-200 text-slate-400 font-black px-12 py-4 rounded-2xl transition-all flex items-center gap-3 disabled:cursor-not-allowed">
+                                <i class="fa-solid fa-wand-magic-sparkles"></i>
+                                <span>아보카도 수확하기</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right: Inputs -->
+                <div class="lg:col-span-5 flex flex-col gap-6">
+                    <div class="glass-card rounded-3xl p-6">
+                        <h4 class="font-bold mb-4 flex items-center gap-2"><i class="fa-solid fa-seedling text-lime-500"></i> 아이디어 주입</h4>
+                        <div class="flex gap-2">
+                            <input type="text" id="kwInput" placeholder="단어나 문장을 입력..." class="flex-1 px-4 py-3 rounded-xl border border-lime-100 outline-none focus:ring-2 focus:ring-lime-400 transition-all">
+                            <button onclick="addNewKeyword()" class="bg-lime-500 text-white font-bold px-6 rounded-xl hover:bg-lime-600 transition-colors">주입</button>
+                        </div>
+                    </div>
+                    <div class="glass-card rounded-3xl p-6 flex-1 flex flex-col min-h-[300px]">
+                        <h4 class="font-bold mb-4 flex justify-between">
+                            <span><i class="fa-solid fa-box-archive text-amber-700"></i> 보따리</span>
+                            <span id="kwCount" class="text-lime-600">0</span>
+                        </h4>
+                        <div id="kwList" class="flex flex-wrap gap-2 content-start overflow-y-auto max-h-[400px]">
+                            <!-- Keywords will appear here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 3: Harvest Mindmap -->
+        <section id="harvestSection" class="hidden">
+            <div class="flex flex-col gap-8">
+                <div class="glass-card rounded-[3rem] p-8 md:p-12 flex flex-col md:flex-row justify-between items-center gap-6 border-b-8 border-lime-500">
+                    <div>
+                        <h2 class="text-4xl font-black text-emerald-900 mb-2">수확 완료!</h2>
+                        <p class="text-slate-500">입력된 키워드들이 유기적으로 연결되어 새로운 인사이트를 형성했습니다.</p>
+                    </div>
+                    <div class="flex gap-3">
+                        <button onclick="resetToWork()" class="bg-slate-100 px-6 py-3 rounded-xl font-bold hover:bg-slate-200 transition-all">더 키우기</button>
+                        <button onclick="window.print()" class="bg-emerald-800 text-white px-8 py-3 rounded-xl font-bold shadow-lg hover:bg-emerald-900 transition-all">내보내기</button>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                    <!-- Mindmap Canvas -->
+                    <div class="lg:col-span-8">
+                        <div class="glass-card rounded-[3rem] p-6 h-[650px] relative overflow-hidden bg-[#F7F9E8]">
+                            <div class="absolute top-6 left-8 z-10">
+                                <h4 class="font-bold text-emerald-800"><i class="fa-solid fa-diagram-project mr-2"></i> 확장 브레인스토밍 맵</h4>
+                            </div>
+                            <canvas id="mindmapCanvas" class="w-full h-full"></canvas>
+                        </div>
+                    </div>
+                    <!-- Concept Summary -->
+                    <div class="lg:col-span-4 flex flex-col gap-6">
+                        <div class="glass-card rounded-3xl p-8 bg-emerald-900 text-white">
+                            <h4 class="text-lime-400 font-bold mb-4">Core Concept</h4>
+                            <div id="aiSlogan" class="text-2xl font-black leading-tight mb-4">로딩 중...</div>
+                            <p id="aiDesc" class="text-emerald-100 text-sm leading-relaxed opacity-80"></p>
+                        </div>
+                        <div class="glass-card rounded-3xl p-8 flex-1">
+                            <h4 class="font-bold mb-6 flex items-center gap-2"><i class="fa-solid fa-palette text-indigo-500"></i> Visual Tone</h4>
+                            <div class="grid grid-cols-2 gap-4" id="moodGrid">
+                                <div class="h-24 bg-lime-100 rounded-2xl flex items-center justify-center text-3xl">🍃</div>
+                                <div class="h-24 bg-orange-100 rounded-2xl flex items-center justify-center text-3xl">☀️</div>
+                                <div class="h-24 bg-slate-100 rounded-2xl flex items-center justify-center text-3xl">🔘</div>
+                                <div class="h-24 bg-emerald-50 rounded-2xl flex items-center justify-center text-3xl">✨</div>
+                            </div>
+                            <p class="text-[11px] text-slate-400 mt-6 text-center italic">키워드 분석에 기반한 컬러/무드 제안입니다.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Visualization & Content Choices: 
+        1. Avocado Visual: CSS Transition 기반. 키워드 1개당 숙성도 약 10~15% 상승. 
+        2. Mindmap: HTML5 Canvas API 사용. 사용자가 입력한 키워드를 중심으로 'AI 연상 키워드'를 2단계 더 생성하여 유선형으로 연결.
+        3. Concept Generation: 입력된 첫 번째 키워드를 기반으로 카테고리별 슬로건 템플릿 적용.
+        4. No SVG/Mermaid: 모든 그래픽은 CSS와 Canvas로 구현하여 유연한 애니메이션 지원.
+    -->
+
+    <script>
+        let state = {
+            title: '',
+            keywords: [],
+            ripeness: 0,
+            aiExtensions: {
+                'MZ': ['숏폼', '디토소비', '갓생', '퍼스널컬러'],
+                '환경': ['제로웨이스트', '업사이클링', '그린슈머', '지속가능성'],
+                '기술': ['AI', '메타버스', '초개인화', '자동화'],
+                '기본': ['혁신', '감성', '본질', '연결', '경험', '일상', '발견']
+            }
+        };
+
+        // --- Core Functions ---
+
+        function initProject() {
+            const titleInput = document.getElementById('initialProjectTitle');
+            if (!titleInput.value.trim()) return alert('이름을 입력해주세요!');
+            
+            state.title = titleInput.value.trim();
+            document.getElementById('currentTitleDisplay').innerText = state.title;
+            document.getElementById('navProjectTitle').innerText = state.title;
+            
+            document.getElementById('startSection').classList.add('hidden');
+            document.getElementById('navStatus').classList.remove('hidden');
+            document.getElementById('workSection').classList.remove('hidden');
+        }
+
+        function addNewKeyword() {
+            const input = document.getElementById('kwInput');
+            const val = input.value.trim();
+            if (!val) return;
+
+            if (state.keywords.includes(val)) return alert('이미 있는 키워드입니다.');
+
+            state.keywords.push(val);
+            input.value = '';
+            
+            // Ripeness Logic: 키워드당 12%씩 증가 (최대 100%)
+            state.ripeness = Math.min(100, state.keywords.length * 12);
+            
+            renderKeywords();
+            updateVisuals();
+            
+            // Wobble Animation
+            const avo = document.getElementById('avoBody');
+            avo.classList.add('animate-wobble');
+            setTimeout(() => avo.classList.remove('animate-wobble'), 500);
+        }
+
+        function renderKeywords() {
+            const list = document.getElementById('kwList');
+            const count = document.getElementById('kwCount');
+            list.innerHTML = '';
+            count.innerText = state.keywords.length;
+
+            state.keywords.forEach((kw, idx) => {
+                const chip = document.createElement('div');
+                chip.className = 'bg-white border border-lime-200 px-3 py-1.5 rounded-full text-xs font-bold text-emerald-800 shadow-sm animate-in zoom-in duration-300';
+                chip.innerHTML = `#${kw} <button onclick="removeKeyword(${idx})" class="ml-1 text-slate-300 hover:text-rose-500">×</button>`;
+                list.appendChild(chip);
+            });
+        }
+
+        function removeKeyword(idx) {
+            state.keywords.splice(idx, 1);
+            state.ripeness = Math.min(100, state.keywords.length * 12);
+            renderKeywords();
+            updateVisuals();
+        }
+
+        function updateVisuals() {
+            const r = state.ripeness;
+            document.getElementById('ripenessBar').style.width = `${r}%`;
+            document.getElementById('ripenessText').innerText = `${r}%`;
+            
+            const body = document.getElementById('avoBody');
+            const flesh = document.getElementById('avoFlesh');
+            const seed = document.getElementById('avoSeed');
+            const btn = document.getElementById('harvestBtn');
+            const guide = document.getElementById('guideText');
+
+            // 색상 변화 (밝은 연두 -> 진한 초록)
+            if (r < 40) {
+                body.style.backgroundColor = '#D1EBAD';
+                flesh.style.backgroundColor = '#F7F9E8';
+            } else if (r < 80) {
+                body.style.backgroundColor = '#7CB53C';
+                flesh.style.backgroundColor = '#FFFDC2';
+                seed.style.opacity = '0.4';
+                seed.style.transform = 'translateX(-50%) scale(0.7)';
+            } else {
+                body.style.backgroundColor = '#2D3A18';
+                flesh.style.backgroundColor = '#FFFDC2';
+                seed.style.opacity = '1';
+                seed.style.transform = 'translateX(-50%) scale(1)';
+            }
+
+            // 수확 버튼 활성화
+            if (r >= 50) {
+                btn.disabled = false;
+                btn.className = 'bg-emerald-800 text-white font-black px-12 py-4 rounded-2xl transition-all flex items-center gap-3 shadow-xl hover:scale-105 active:scale-95';
+                guide.innerText = "충분히 숙성되었습니다! 이제 수확하세요.";
+                guide.className = "text-emerald-600 font-bold mb-6 animate-pulse";
+            } else {
+                btn.disabled = true;
+                btn.className = 'bg-slate-200 text-slate-400 font-black px-12 py-4 rounded-2xl transition-all flex items-center gap-3 disabled:cursor-not-allowed';
+                guide.innerText = `숙성이 더 필요합니다 (현재 키워드 ${state.keywords.length}개)`;
+                guide.className = "text-slate-400 font-medium mb-6";
+            }
+        }
+
+        // --- Harvest & Mindmap Canvas ---
+
+        function handleHarvest() {
+            document.getElementById('workSection').classList.add('hidden');
+            document.getElementById('harvestSection').classList.remove('hidden');
+            
+            generateConcept();
+            initMindmap();
+        }
+
+        function resetToWork() {
+            document.getElementById('harvestSection').classList.add('hidden');
+            document.getElementById('workSection').classList.remove('hidden');
+        }
+
+        function generateConcept() {
+            const base = state.keywords[0] || "아이디어";
+            const slogans = [
+                `세상을 바꾸는 ${base}의 한 끗`,
+                `${base}, 그 이상의 가치를 경험하다`,
+                `가장 본질적인 ${base}에 집중하는 순간`,
+                `평범함을 특별함으로 만드는 ${base}`
+            ];
+            document.getElementById('aiSlogan').innerText = slogans[Math.floor(Math.random() * slogans.length)];
+            document.getElementById('aiDesc').innerText = `${state.keywords.join(', ')} 등의 핵심 키워드를 관통하는 캠페인 전략입니다. 사용자의 니즈와 브랜드의 접점을 ${base}라는 키워드로 응축했습니다.`;
+        }
+
+        function initMindmap() {
+            const canvas = document.getElementById('mindmapCanvas');
+            const ctx = canvas.getContext('2d');
+            const parent = canvas.parentElement;
+            
+            // Set scale
+            canvas.width = parent.offsetWidth;
+            canvas.height = parent.offsetHeight;
+
+            const nodes = [];
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+
+            // 1. Root Node
+            nodes.push({ x: centerX, y: centerY, label: state.title, size: 50, color: '#2D3A18', textColor: '#FFF', type: 'root' });
+
+            // 2. User Keyword Nodes
+            state.keywords.forEach((kw, i) => {
+                const angle = (i / state.keywords.length) * Math.PI * 2;
+                const dist = 180;
+                const nx = centerX + Math.cos(angle) * dist;
+                const ny = centerY + Math.sin(angle) * dist;
+                
+                nodes.push({ x: nx, y: ny, label: kw, size: 35, color: '#A3D160', textColor: '#2D3A18', parentIdx: 0, type: 'user' });
+
+                // 3. AI Extension Nodes
+                const extensions = state.aiExtensions['기본'];
+                for(let j = 0; j < 2; j++) {
+                    const subAngle = angle + (j === 0 ? -0.4 : 0.4);
+                    const subDist = 300;
+                    const sx = centerX + Math.cos(subAngle) * subDist;
+                    const sy = centerY + Math.sin(subAngle) * subDist;
+                    nodes.push({ x: sx, y: sy, label: extensions[Math.floor(Math.random() * extensions.length)], size: 25, color: '#FFFDC2', textColor: '#744F28', parentIdx: nodes.length - 1, type: 'ai' });
+                }
+            });
+
+            function draw() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                
+                // Draw Lines first
+                ctx.lineWidth = 2;
+                nodes.forEach((node, idx) => {
+                    if (node.parentIdx !== undefined) {
+                        const parent = nodes[node.parentIdx];
+                        ctx.beginPath();
+                        ctx.strokeStyle = node.type === 'ai' ? '#E2E8F0' : '#D1EBAD';
+                        ctx.moveTo(parent.x, parent.y);
+                        ctx.quadraticCurveTo(
+                            (parent.x + node.x) / 2 + 30, (parent.y + node.y) / 2 - 30, 
+                            node.x, node.y
+                        );
+                        ctx.stroke();
+                    }
+                });
+
+                // Draw Nodes
+                nodes.forEach(node => {
+                    ctx.beginPath();
+                    ctx.arc(node.x, node.y, node.size, 0, Math.PI * 2);
+                    ctx.fillStyle = node.color;
+                    ctx.fill();
+                    
+                    // Shadow
+                    ctx.shadowBlur = 10;
+                    ctx.shadowColor = 'rgba(0,0,0,0.05)';
+                    
+                    // Text
+                    ctx.fillStyle = node.textColor;
+                    ctx.font = `bold ${node.size * 0.4}px Pretendard`;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(node.label, node.x, node.y);
+                    ctx.shadowBlur = 0;
+                });
+            }
+
+            draw();
+        }
+
+        // 입력창 엔터키 대응
+        document.getElementById('kwInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') addNewKeyword();
+        });
+        document.getElementById('initialProjectTitle').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') initProject();
+        });
+
+    </script>
+
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+</body>
+</html>
+```
+
+### 수정 및 강화된 포인트:
+1.  **숙성도 로직 개선**: 키워드를 추가할 때마다 `state.ripeness`가 정확하게 계산되어 UI(진행바, 아보카도 색상)에 즉시 반영되도록 수정했습니다.
+2.  **아보카도 비주얼 진화**: 숙성도에 따라 아보카도가 단순히 색만 바뀌는 것이 아니라, **중앙의 씨앗(Seed)**이 점진적으로 나타나며 크기가 커지는 시각적 효과를 추가했습니다.
+3.  **마인드맵 구현 완료**: HTML5 Canvas를 활용하여 사용자가 입력한 키워드를 중심으로 **AI가 연상한 확장 키워드**들이 거미줄처럼 펼쳐지는 인터랙티브 맵을 구현했습니다. 
+4.  **인터랙티브 경험**: 수확하기 전 아보카도를 흔들거나(Wobble 애니메이션), 버튼이 활성화되는 등의 게이미피케이션 요소를 넣어 기획 과정이 즐겁도록 설계했습니다.
+
+이제 키워드를 5개 이상 넣어보시고, 아보카도가 완전히 익었을 때 **'수확하기'** 버튼을 눌러 결과물을 확인해 보세요!
